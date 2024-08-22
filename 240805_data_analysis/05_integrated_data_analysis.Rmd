@@ -1,5 +1,5 @@
 ---
-title: "Integration and Downstream analysis"
+title: "Integration and Downstream analysis, Quantile: `r params$chosen.quantile`, Integration: `r params$integration.case`"
 author:
   - "trnguyen@ukaachen.de"
 date: "Last update on `r format(Sys.time(), '%d %B, %Y')`"
@@ -13,6 +13,13 @@ output:
     toc_depth: 3
     number_sections: true
     theme: lumen
+params:
+  outdir: NA
+  PROJECT: NA
+  config.version: NA
+  output.version: NA
+  chosen.quantile: NA
+  integration.case: NA
 ---
 
 
@@ -82,12 +89,20 @@ all.integration.case <- list(
 ##### input arguments
 #####----------------------------------------------------------------------#####
 
-outdir <- "/home/hieunguyen/CRC1382/outdir"
-PROJECT <- "240805_BSimons"
-output.version <- "20240820"
-config.version <- "default"
-chosen.quantile <- 0.99
-integration.case <- "all_samples"
+# outdir <- "/home/hieunguyen/CRC1382/outdir"
+# PROJECT <- "240805_BSimons"
+# output.version <- "20240820"
+# config.version <- "default"
+# chosen.quantile <- 0.99
+# integration.case <- "all_samples"
+
+outdir <- params$outdir
+PROJECT <- params$PROJECT
+output.version <- params$output.version
+config.version <- params$config.version
+chosen.quantile <- params$chosen.quantile
+integration.case <- params$integration.case
+
 path.to.main.input <- file.path(outdir, PROJECT, output.version, config.version)
 path.to.main.output <- file.path(outdir, PROJECT, "data_analysis", output.version, config.version)
 

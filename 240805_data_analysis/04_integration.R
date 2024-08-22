@@ -97,8 +97,6 @@ for (chosen.quantile in all.quantiles){
       print(sprintf("File exsited at %s", path.to.input.s.obj))
     }
   }
-  
-  
 }
 
 
