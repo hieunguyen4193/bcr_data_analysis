@@ -1,5 +1,5 @@
 ---
-title: "`r params$PROJECT` Quality Control Hashtag-Antibody 1, 2, 3, count cells with hashtags (Sample: `r params$sample.id`)"
+title: "`r params$PROJECT` Quality Control Hashtag-Antibody 1, 2, 3, count cells with hashtags (Sample: `r params$sample.id`, quantile `r params$chosen.quantile`)"
 author:
   - "trnguyen@ukaachen.de"
 date: "Last update on `r format(Sys.time(), '%d %B, %Y')`"
@@ -19,6 +19,7 @@ params:
   outdir: NA
   output.version: NA
   config.version: NA
+  chosen.quantile: NA
 ---
 
 
@@ -57,14 +58,14 @@ sample.id <- params$sample.id
 outdir <- params$outdir
 output.version <- params$output.version
 config.version <- params$config.version
+chosen.quantile <- params$chosen.quantile
 
 # outdir <- "/home/hieunguyen/CRC1382/outdir"
 # PROJECT <- "240805_BSimons"
 # sample.id <- "M1"
 # output.version <- "20240820"
 # config.version <- "default"
-
-chosen.quantile <- 0.99
+# chosen.quantile <- 0.99
 
 path.to.main.input <- file.path(outdir, PROJECT, output.version, config.version, "1st_round")
 

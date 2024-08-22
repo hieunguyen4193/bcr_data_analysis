@@ -53,8 +53,8 @@ script src = "https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"
 # trnguyen@ukaachen.de
 #
 #####----------------------------------------------------------------------#####
-gc()
-rm(list = ls())
+# gc()
+# rm(list = ls())
 
 scrna_pipeline_src <- "/home/hieunguyen/CRC1382/src_2023/src_pipeline/scRNA_GEX_pipeline/processes_src"
 source(file.path(scrna_pipeline_src, "import_libraries.R"))
