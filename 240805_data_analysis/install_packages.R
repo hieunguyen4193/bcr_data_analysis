@@ -30,3 +30,5 @@ library("Trex")
 library("Ibex")
 
 # install.packages("https://cran.r-project.org/src/contrib/Archive/Matrix/Matrix_1.5-4.1.tar.gz", repos = NULL, type = "source")
+# install.packages("https://cran.r-project.org/src/contrib/Archive/ggplot2/ggplot2_3.4.4.tar.gz", repos = NULL, type = "source")
+# devtools::install_github("ncborcherding/scRepertoire@v1")

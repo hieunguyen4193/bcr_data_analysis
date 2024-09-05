@@ -93,7 +93,7 @@ PROJECT <- "240805_BSimons"
 output.version <- "20240820"
 config.version <- "default"
 chosen.quantile <- 0.85
-integration.case <- "mouse1"
+integration.case <- "mouse2"
 
 # outdir <- params$outdir
 # PROJECT <- params$PROJECT
