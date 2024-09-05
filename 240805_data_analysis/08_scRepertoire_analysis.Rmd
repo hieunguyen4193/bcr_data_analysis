@@ -54,6 +54,11 @@ script src = "https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"
 # gc()
 # rm(list = ls())
 
+##### install the legacy version v1 of scRepertoire package
+# devtools::install_github("ncborcherding/scRepertoire@v1", upgrade = FALSE)
+# install.packages("https://cran.r-project.org/src/contrib/Archive/Matrix/Matrix_1.5-4.tar.gz", type = "source", repos = NULL)
+# install.packages("https://cran.r-project.org/src/contrib/Archive/ggplot2/ggplot2_3.4.4.tar.gz", type = "source", repos = NULL)
+
 scrna_pipeline_src <- "/media/hieunguyen/HNSD01/src/src_pipeline/scRNA_GEX_pipeline/processes_src"
 source(file.path(scrna_pipeline_src, "import_libraries.R"))
 source(file.path(scrna_pipeline_src, "helper_functions.R"))
@@ -93,7 +98,7 @@ PROJECT <- "240805_BSimons"
 output.version <- "20240820"
 config.version <- "default"
 chosen.quantile <- 0.85
-integration.case <- "mouse1"
+integration.case <- "all_samples"
 
 # outdir <- params$outdir
 # PROJECT <- params$PROJECT
@@ -108,85 +113,66 @@ path.to.main.output <- file.path(outdir, PROJECT, "data_analysis", output.versio
 path.to.01.output <- file.path(path.to.main.output, "01_output")
 path.to.04.output <- file.path(path.to.main.output, "04_output", sprintf("quantile_%s", chosen.quantile))
 path.to.05.output <- file.path(path.to.main.output, "05_output", sprintf("quantile_%s", chosen.quantile), integration.case)
-path.to.06.output <- file.path(path.to.main.output, "06_output", sprintf("quantile_%s", chosen.quantile), integration.case)
-dir.create(path.to.06.output, showWarnings = FALSE, recursive = TRUE)
+path.to.08.output <- file.path(path.to.main.output, "06_output", sprintf("quantile_%s", chosen.quantile), integration.case)
+dir.create(path.to.08.output, showWarnings = FALSE, recursive = TRUE)
 
 path.to.input.s.obj <- file.path(path.to.04.output, integration.case, "s8_output", sprintf("%s.output.s8.rds", PROJECT))
 s.obj <- readRDS(path.to.input.s.obj)
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='hide', fig.width=14, fig.height=10}
 
 #####----------------------------------------------------------------------#####
-##### pre-processing the data with ibex
+##### add VDJ information
 #####----------------------------------------------------------------------#####
-library("scRepertoire")
-library("Ibex")
+vdj.outputdir <- file.path(outdir, PROJECT, output.version, config.version, "VDJ_output")
+all.vdj.files <- Sys.glob(file.path(vdj.outputdir, "annotated_contigs_clonaltype_*.csv"))
+names(all.vdj.files) <- to_vec( for(item in basename(all.vdj.files)) str_replace(str_replace(item, "annotated_contigs_clonaltype_", ""), ".csv", ""))
 
-threshold <- 0.85
-removeNA <- TRUE
-removeMulti <- TRUE
-if (file.exists(file.path(path.to.06.output, sprintf("combined_contigs_%s_%s_%s.rds", threshold, removeNA, removeMulti))) == FALSE){
-  path.to.storage <- "/media/hieunguyen/HNSD01/storage"
-  path.to.main.input <- file.path(path.to.storage, PROJECT)
-  
-  path.to.VDJ.input <- file.path(path.to.main.input, "VDJ")
-  
-  all.contig.files <- Sys.glob(file.path(path.to.VDJ.input, "*/filtered_contig_annotations.csv"))
-  
-  sample.names <- unlist(lapply(lapply(all.contig.files, dirname), basename))
-  
-  names(all.contig.files) <- sample.names
-  
-  contig_list <- lapply(all.contig.files, vroom, show_col_type = FALSE)
-  
-  names(contig_list) <- sample.names
-  combined.contigs <- combineBCR(contig_list,
-                                   samples = sample.names,
-                                   ID = sample.names,
-                                   removeNA = removeNA,
-                                   removeMulti = removeMulti,
-                                   threshold = threshold)
-  saveRDS(combined.contigs, file.path(path.to.06.output, sprintf("combined_contigs_%s_%s_%s.rds", threshold, removeNA, removeMulti)))
-} else {
-  combined.contigs <- readRDS(file.path(path.to.06.output, sprintf("combined_contigs_%s_%s_%s.rds", threshold, removeNA, removeMulti)))
+all.vdj.files <- all.vdj.files[all.integration.case[[integration.case]]]
+
+vdjdf <- data.frame()
+for (i in seq(1, length(all.vdj.files))){
+  file <- all.vdj.files[[i]]
+  tmpdf <- read.csv(file)
+  vdjdf <- rbind(vdjdf, tmpdf)
 }
 
-if (file.exists(file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PROJECT))) == FALSE){
-  ##### change the barcode
-  for (i in names(combined.contigs)){
-    tmpdf <- combined.contigs[[i]]
-    sample.id <- unique(tmpdf$ID)
-    tmpdf <- tmpdf %>% rowwise() %>%
-      mutate(barcode = str_replace(barcode, sprintf("%s_%s", sample.id, sample.id), sample.id))
-    combined.contigs[[i]] <- tmpdf
-  }
-  
-  s.obj <- combineExpression(combined.contigs, s.obj, cloneCall="aa")
-  
-  #Subset only B cells (by contigs)
-  s.obj$BCR.recoverd <- "No"
-  s.obj$BCR.recoverd[!is.na(s.obj$CTaa)] <- "Yes"
-  s.obj <- subset(s.obj, BCR.recoverd == "Yes")
-  
-  s.obj <- runIbex(s.obj, 
-                       chains = "Heavy",
-                       encoder.input = "KF", 
-                       reduction.name = "ibex.KF")
-  
-  s.obj <- RunUMAP(s.obj, 
-                   reduction = "ibex.KF",
-                   dims = 1:30,
-                   reduction.name = 'ibex.umap', 
-                   reduction.key = 'ibexUMAP_')
-  
-  saveRDS(s.obj, file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PROJECT)))
-} else {
-  s.obj <- readRDS(file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PROJECT)))
+vdjdf <- subset(vdjdf, select = -c(X, ID)) %>%
+  rowwise() %>%
+  mutate(barcode = str_replace(barcode, sprintf("%s_%s_", sample, sample), sprintf("%s_", sample)))
+
+meta.data <- s.obj@meta.data %>% rownames_to_column("barcode")
+meta.data <- merge(meta.data, vdjdf, by.x = "barcode", by.y = "barcode", all.x = TRUE) %>%
+  rowwise() %>%
+  mutate(with.clone = ifelse(is.na(CTstrict) == FALSE, "yes", "no")) %>%
+  column_to_rownames("barcode")
+meta.data <- meta.data[row.names(s.obj@meta.data), ]
+
+cols.to.add <- setdiff(colnames(vdjdf), c("barcode", "sample"))
+
+for (col in c(cols.to.add, "with.clone")){
+  s.obj <- AddMetaData(object = s.obj, metadata = meta.data[[col]], col.name = col)
 }
+
+with.clone.cells <- subset(s.obj@meta.data, s.obj@meta.data$with.clone == "yes") %>% row.names()
+without.clone.cells <- subset(s.obj@meta.data, s.obj@meta.data$with.clone == "no") %>% row.names()
+
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+count.clone.global <- table(s.obj$with.clone) %>% data.frame()
+colnames(count.clone.global) <- c("with.Clone", "count")
+count.clone.global %>% create_dt()
 ```
 
 # UMAP
+
 ## Cells with proper clone information and cells without proper clone information
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
-# DimPlot(object = s.obj, cells.highlight = list("with.Clone" = with.clone.cells, "without.Clone" = without.clone.cells), label = TRUE, label.size = 8, reduction = "INTE_UMAP")
+DimPlot(object = s.obj, cells.highlight = list("with.Clone" = with.clone.cells, "without.Clone" = without.clone.cells), label = TRUE, label.size = 8, reduction = "INTE_UMAP")
 ```
 
 ## UMAP: All cells in all samples
@@ -199,38 +185,7 @@ DimPlot(object = s.obj, label = TRUE, label.size = 8, reduction = "INTE_UMAP", l
 DimPlot(object = s.obj, label = TRUE, label.size = 8, reduction = "INTE_UMAP", label.box = TRUE, group.by = "name")
 ```
 
-```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
-DimPlot(object = s.obj, reduction = "ibex.umap", label = TRUE, label.box = TRUE, group.by = "seurat_clusters", pt.size = 2)
-```
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
-all.available.ht <- list()
-for (sample.id in unique(s.obj$name)){
-  all.available.ht[[sample.id]] <- unique(subset(s.obj, name == sample.id)$HTO_classification)  %>% sort()
-}
 
-meta.data <- s.obj@meta.data
-count.clones <- table(meta.data$CTstrict)
-
-clonedf <- data.frame(CTstrict = unique(meta.data$CTstrict))
-clonedf <- clonedf %>% rowwise() %>%
-  mutate(count = count.clones[[CTstrict]]) %>% arrange(desc(count))
-
-for (sample.id in unique(s.obj$name)){
-  clonedf[[sample.id]] <- unlist(lapply(clonedf$CTstrict, function(x){
-    nrow(subset(meta.data, meta.data$CTstrict == x & meta.data$name == sample.id))
-  }))  
-  for (ht in all.available.ht[[sample.id]]){
-    clonedf[[sprintf("%s_%s", sample.id, ht)]] <- unlist(lapply(clonedf$CTstrict, function(x){
-      nrow(subset(meta.data, meta.data$CTstrict == x & meta.data$name == sample.id &  meta.data$HTO_classification == ht))
-    })) 
-  }
-}
-writexl::write_xlsx(clonedf, file.path(path.to.06.output, sprintf("clone_Table_%s.xlsx", integration.case)))
 ```
-
-```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
-clonedf %>% create_dt()
-```
-
-

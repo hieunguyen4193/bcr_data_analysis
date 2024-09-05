@@ -42,7 +42,7 @@ for (chosen.quantile in all.quantiles){
   path.to.main.output <- file.path(outdir, PROJECT, "data_analysis", output.version, config.version)
   
   path.to.01.output <- file.path(path.to.main.output, "01_output")
-  path.to.04.output <- file.path(path.to.main.output, "04_output", output.version, config.version, sprintf("quantile_%s", chosen.quantile))
+  path.to.04.output <- file.path(path.to.main.output, "04_output", sprintf("quantile_%s", chosen.quantile))
   
   all.s.obj <- list()
   for (i in seq(1, length(all.samples))){
