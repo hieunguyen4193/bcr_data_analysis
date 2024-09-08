@@ -93,7 +93,7 @@ PROJECT <- "240805_BSimons"
 output.version <- "20240820"
 config.version <- "default"
 chosen.quantile <- 0.85
-integration.case <- "mouse2"
+integration.case <- "all_samples"
 
 # outdir <- params$outdir
 # PROJECT <- params$PROJECT
@@ -117,7 +117,15 @@ s.obj <- readRDS(path.to.input.s.obj)
 #####----------------------------------------------------------------------#####
 ##### pre-processing the data with ibex
 #####----------------------------------------------------------------------#####
-library("scRepertoire")
+#### install scRepertoire 2.0
+if (packageVersion("scRepertoire") != "2.0.5"){
+  install.packages("https://cran.r-project.org/src/contrib/Archive/Matrix/Matrix_1.6-5.tar.gz", type = "source", repos = NULL)
+  install.packages(c("ggdendro", "iNEXT", "quantreg"))
+  # install.packages("https://www.bioconductor.org/packages/release/bioc/src/contrib/scRepertoire_2.0.0.tar.gz", type = "source", repos = NULL)
+  devtools::install_github(repo = "ncborcherding/scRepertoire")
+}
+library(scRepertoire)
+
 library("Ibex")
 
 threshold <- 0.85
@@ -144,13 +152,7 @@ if (file.exists(file.path(path.to.06.output, sprintf("combined_contigs_%s_%s_%s.
                                    removeNA = removeNA,
                                    removeMulti = removeMulti,
                                    threshold = threshold)
-  saveRDS(combined.contigs, file.path(path.to.06.output, sprintf("combined_contigs_%s_%s_%s.rds", threshold, removeNA, removeMulti)))
-} else {
-  combined.contigs <- readRDS(file.path(path.to.06.output, sprintf("combined_contigs_%s_%s_%s.rds", threshold, removeNA, removeMulti)))
-}
-
-if (file.exists(file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PROJECT))) == FALSE){
-  ##### change the barcode
+  
   for (i in names(combined.contigs)){
     tmpdf <- combined.contigs[[i]]
     sample.id <- unique(tmpdf$ID)
@@ -159,28 +161,37 @@ if (file.exists(file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PR
     combined.contigs[[i]] <- tmpdf
   }
   
-  s.obj <- combineExpression(combined.contigs, s.obj, cloneCall="aa")
-  
-  #Subset only B cells (by contigs)
-  s.obj$BCR.recoverd <- "No"
-  s.obj$BCR.recoverd[!is.na(s.obj$CTaa)] <- "Yes"
-  s.obj <- subset(s.obj, BCR.recoverd == "Yes")
-  
-  s.obj <- runIbex(s.obj, 
-                       chains = "Heavy",
-                       encoder.input = "KF", 
-                       reduction.name = "ibex.KF")
-  
-  s.obj <- RunUMAP(s.obj, 
-                   reduction = "ibex.KF",
-                   dims = 1:30,
-                   reduction.name = 'ibex.umap', 
-                   reduction.key = 'ibexUMAP_')
-  
-  saveRDS(s.obj, file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PROJECT)))
+  saveRDS(combined.contigs, file.path(path.to.06.output, sprintf("combined_contigs_%s_%s_%s.rds", threshold, removeNA, removeMulti)))
 } else {
-  s.obj <- readRDS(file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PROJECT)))
+  combined.contigs <- readRDS(file.path(path.to.06.output, sprintf("combined_contigs_%s_%s_%s.rds", threshold, removeNA, removeMulti)))
 }
+
+# 
+# if (file.exists(file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PROJECT))) == FALSE){
+#   ##### change the barcode
+#     
+#   s.obj <- combineExpression(combined.contigs, s.obj, cloneCall="aa")
+#   
+#   #Subset only B cells (by contigs)
+#   s.obj$BCR.recoverd <- "No"
+#   s.obj$BCR.recoverd[!is.na(s.obj$CTaa)] <- "Yes"
+#   s.obj <- subset(s.obj, BCR.recoverd == "Yes")
+#   
+#   s.obj <- runIbex(s.obj, 
+#                        chains = "Heavy",
+#                        encoder.input = "KF", 
+#                        reduction.name = "ibex.KF")
+#   
+#   s.obj <- RunUMAP(s.obj, 
+#                    reduction = "ibex.KF",
+#                    dims = 1:30,
+#                    reduction.name = 'ibex.umap', 
+#                    reduction.key = 'ibexUMAP_')
+#   
+#   saveRDS(s.obj, file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PROJECT)))
+# } else {
+#   s.obj <- readRDS(file.path(path.to.06.output, sprintf("%s.ibex.output.s8.rds", PROJECT)))
+# }
 ```
 
 # UMAP
@@ -199,38 +210,108 @@ DimPlot(object = s.obj, label = TRUE, label.size = 8, reduction = "INTE_UMAP", l
 DimPlot(object = s.obj, label = TRUE, label.size = 8, reduction = "INTE_UMAP", label.box = TRUE, group.by = "name")
 ```
 
-```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
-DimPlot(object = s.obj, reduction = "ibex.umap", label = TRUE, label.box = TRUE, group.by = "seurat_clusters", pt.size = 2)
-```
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+s.obj <- combineExpression(combined.contigs, s.obj, cloneCall="aa")
+
 all.available.ht <- list()
 for (sample.id in unique(s.obj$name)){
   all.available.ht[[sample.id]] <- unique(subset(s.obj, name == sample.id)$HTO_classification)  %>% sort()
 }
 
-meta.data <- s.obj@meta.data
-count.clones <- table(meta.data$CTstrict)
-
-clonedf <- data.frame(CTstrict = unique(meta.data$CTstrict))
-clonedf <- clonedf %>% rowwise() %>%
-  mutate(count = count.clones[[CTstrict]]) %>% arrange(desc(count))
-
-for (sample.id in unique(s.obj$name)){
-  clonedf[[sample.id]] <- unlist(lapply(clonedf$CTstrict, function(x){
-    nrow(subset(meta.data, meta.data$CTstrict == x & meta.data$name == sample.id))
-  }))  
-  for (ht in all.available.ht[[sample.id]]){
-    clonedf[[sprintf("%s_%s", sample.id, ht)]] <- unlist(lapply(clonedf$CTstrict, function(x){
-      nrow(subset(meta.data, meta.data$CTstrict == x & meta.data$name == sample.id &  meta.data$HTO_classification == ht))
-    })) 
+if (file.exists(file.path(path.to.06.output, sprintf("clone_Table_%s.xlsx", integration.case))) == FALSE){
+  meta.data <- s.obj@meta.data
+  count.clones <- table(meta.data$CTstrict)
+  
+  clonedf <- data.frame(CTstrict = setdiff(unique(meta.data$CTstrict), c(NA)))
+  clonedf <- clonedf %>% rowwise() %>%
+    mutate(count = count.clones[[CTstrict]]) %>% arrange(desc(count))
+  
+  for (sample.id in unique(s.obj$name)){
+    print(sprintf("working on sample %s", sample.id))
+    clonedf[[sample.id]] <- unlist(lapply(clonedf$CTstrict, function(x){
+      nrow(subset(meta.data, meta.data$CTstrict == x & meta.data$name == sample.id))
+    }))  
+    for (ht in all.available.ht[[sample.id]]){
+      print(sprintf("working on sample %s hashtag %s", sample.id, ht))
+      clonedf[[sprintf("%s_%s", sample.id, ht)]] <- unlist(lapply(clonedf$CTstrict, function(x){
+        nrow(subset(meta.data, meta.data$CTstrict == x & meta.data$name == sample.id &  meta.data$HTO_classification == ht))
+      })) 
+    }
   }
+  writexl::write_xlsx(clonedf, file.path(path.to.06.output, sprintf("clone_Table_%s.xlsx", integration.case)))
+} else {
+  clonedf <- readxl::read_excel(file.path(path.to.06.output, sprintf("clone_Table_%s.xlsx", integration.case)))
 }
-writexl::write_xlsx(clonedf, file.path(path.to.06.output, sprintf("clone_Table_%s.xlsx", integration.case)))
+
 ```
 
+# Table: All clones in the dataset
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
 clonedf %>% create_dt()
 ```
 
+# Plot clones on UMAP
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
 
+```
+
+
+# Basic clonal analysis
+
+## Clonal Quant
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+names(combined.contigs) <- to_vec(for (item in names(combined.contigs)) str_split(item, "_")[[1]][[1]] )
+meta.data <- s.obj@meta.data
+
+if (file.exists( file.path(path.to.06.output, "combined_contigs_with_hashtags_info.rds")) == FALSE){
+  new.combined.contigs <- list()
+  for (sample.id in names(combined.contigs)){
+    tmp.combined.contigs <- combined.contigs[[sample.id]]
+    for (ht in unique(subset(meta.data, meta.data$name == sample.id)$HTO_classification)){
+      print(sprintf("working on sample %s, hashtag %s", sample.id, ht))
+      ht.barcodes <- subset(meta.data, meta.data$name == sample.id & meta.data$HTO_classification == ht) %>% row.names()
+      new.combined.contigs[[sprintf("%s_%s", sample.id, ht)]] <- subset(tmp.combined.contigs, tmp.combined.contigs$barcode %in% ht.barcodes)
+      print(dim(new.combined.contigs[[sprintf("%s_%s", sample.id, ht)]]))
+    }
+  }
+  saveRDS(new.combined.contigs, file.path(path.to.06.output, "combined_contigs_with_hashtags_info.rds"))  
+} else {
+  new.combined.contigs <- readRDS( file.path(path.to.06.output, "combined_contigs_with_hashtags_info.rds"))
+}
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+clonalAbundance(new.combined.contigs, 
+                cloneCall = "gene", 
+                scale = FALSE)
+```
+
+## Clonal compare between hashtags in each sample {.tabset}
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+for (sample.id in all.integration.case[[integration.case]]){
+  cat(sprintf("### Sample %s \n", sample.id))
+  p <- clonalCompare(new.combined.contigs, 
+                  top.clones = 10, 
+                  samples = to_vec(for (item in names(new.combined.contigs)) if(grepl(sample.id, item)) item), 
+                  cloneCall="CTstrict", 
+                  graph = "alluvial")
+  print(p)
+  cat("\n \n")
+}
+```
+
+## Clonal compare between paired samples 
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+cat(sprintf("### Alluvial plot between samples %s", paste(all.integration.case[[integration.case]], collapse = ", ")))
+p <- clonalCompare(combined.contigs, 
+                  top.clones = 10, 
+                  samples = all.integration.case[[integration.case]], 
+                  cloneCall="CTstrict", 
+                  graph = "alluvial")
+print(p)
+```
+
+# Visualize clonal dynamics
