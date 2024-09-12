@@ -1,10 +1,31 @@
 echo -e "#############################################";
 echo -e "Working on sample " ${sampleid} "\n";
 echo -e "#############################################";
-sampleid=$1;
-fastq1=$2;
-fastq2=$3;
-outputdir=$4;
+# sampleid=$1;
+# fastq1=$2;
+# fastq2=$3;
+# outputdir=$4;
+
+while getopts "i:o:t:r:" opt; do
+  case ${opt} in
+    i )
+      sampleid=$OPTARG
+      ;;
+    o )
+      outputdir=$OPTARG
+      ;;
+    f )
+      fastq1=$OPTARG
+      ;;
+    r )
+      fastq2=$OPTARG
+      ;;
+    \? )
+      echo "Usage: cmd [-i] sampleid [-o] outputdir [-f] fastq1 [-r] fastq2"
+      exit 1
+      ;;
+  esac
+done
 
 output=${outputdir}/mid_based_output/${sampleid};
 mkdir -p ${output};
