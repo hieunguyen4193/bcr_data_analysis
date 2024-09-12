@@ -87,20 +87,19 @@ all.integration.case <- list(
 ##### input arguments
 #####----------------------------------------------------------------------#####
 
-# outdir <- "/home/hieunguyen/CRC1382/outdir"
-outdir <- "/media/hieunguyen/HNSD01/outdir"
-PROJECT <- "240805_BSimons"
-output.version <- "20240820"
-config.version <- "default"
-chosen.quantile <- 0.85
-integration.case <- "all_samples"
+# outdir <- "/media/hieunguyen/HNSD01/outdir"
+# PROJECT <- "240805_BSimons"
+# output.version <- "20240820"
+# config.version <- "default"
+# chosen.quantile <- 0.85
+# integration.case <- "all_samples"
 
-# outdir <- params$outdir
-# PROJECT <- params$PROJECT
-# output.version <- params$output.version
-# config.version <- params$config.version
-# chosen.quantile <- params$chosen.quantile
-# integration.case <- params$integration.case
+outdir <- params$outdir
+PROJECT <- params$PROJECT
+output.version <- params$output.version
+config.version <- params$config.version
+chosen.quantile <- params$chosen.quantile
+integration.case <- params$integration.case
 
 path.to.main.input <- file.path(outdir, PROJECT, output.version, config.version)
 path.to.main.output <- file.path(outdir, PROJECT, "data_analysis", output.version, config.version)
@@ -113,6 +112,13 @@ dir.create(path.to.06.output, showWarnings = FALSE, recursive = TRUE)
 
 path.to.input.s.obj <- file.path(path.to.04.output, integration.case, "s8_output", sprintf("%s.output.s8.rds", PROJECT))
 s.obj <- readRDS(path.to.input.s.obj)
+
+meta.data <- s.obj@meta.data %>% rownames_to_column("barcode")
+meta.data <- meta.data %>% rowwise() %>%
+  mutate(SampleID = sprintf("%s_%s", name, HTO_classification)) %>%
+  column_to_rownames("barcode")
+meta.data <- meta.data[row.names(s.obj@meta.data),]
+s.obj <- AddMetaData(object = s.obj, col.name = "SampleID", metadata = meta.data$SampleID)
 
 #####----------------------------------------------------------------------#####
 ##### pre-processing the data with ibex
@@ -246,12 +252,50 @@ if (file.exists(file.path(path.to.06.output, sprintf("clone_Table_%s.xlsx", inte
 
 ```
 
+
+## UMAP clone size
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+DimPlot(object = s.obj, reduction = "INTE_UMAP", group.by = "cloneSize")
+```
+
 # Table: All clones in the dataset
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
 clonedf %>% create_dt()
 ```
 
 # Plot clones on UMAP
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+top6.clones <- hash()
+for (i in setdiff(colnames(clonedf), c("CTstrict", "count"))){
+  top6.clones[[i]] <- clonedf[c("CTstrict", i)]
+  colnames(top6.clones[[i]]) <- c("CTstrict", "count")
+  top6.clones[[i]] <- top6.clones[[i]] %>% arrange(desc(count)) %>% head(6) %>% pull(CTstrict)
+}
+```
+
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+for (sample.id in all.integration.case[[integration.case]]){
+  cat(sprintf("## Sample %s {.tabset} \n", sample.id))
+  tmp.s.obj <- subset(s.obj, name == sample.id)
+  tmp.metadata <- tmp.s.obj@meta.data
+  clone.barcodes <- lapply(top6.clones[[sample.id]], function(x){
+    subset(tmp.metadata, CTstrict == x) %>% rownames()
+  })
+  names(clone.barcodes) <- top6.clones[[sample.id]]
+  for (clone in names(clone.barcodes)){
+    cat(sprintf("### Clone %s \n", clone))
+    p <- DimPlot(object = tmp.s.obj, reduction = "INTE_UMAP", cells.highlight = clone.barcodes[[clone]]) +
+      theme(legend.position = "none")
+    print(p)
+    cat("\n \n")  
+  }
+  cat("\n \n")
+}
+
+```
+
+
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
 
 ```
@@ -314,4 +358,4 @@ p <- clonalCompare(combined.contigs,
 print(p)
 ```
 
-# Visualize clonal dynamics
+
