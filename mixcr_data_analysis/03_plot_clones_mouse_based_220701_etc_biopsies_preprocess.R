@@ -1,3 +1,7 @@
+#####----------------------------------------------------------------------#####
+##### DO NOT RUN
+#####----------------------------------------------------------------------#####
+
 gc()
 rm(list = ls())
 
@@ -48,7 +52,6 @@ mid.metadata$MID <- mid.metadata$X
 mid.metadata <- mid.metadata %>% rowwise() %>%
   mutate(X = sprintf("%s_%s", mouse, str_replace(str_replace(population, "Ly6c[+]", ""), "Ly6c[-]", "")))
 count.mid.in.mouse <- table(mid.metadata$mouse)
-
 for (mouse.id in unique(mid.metadata$mouse)){
   # mouse.id <- "m28"
   print(sprintf("Working on mouse %s", mouse.id))
