@@ -12,6 +12,13 @@
 
 All raw data are stored in NAS and Coscine RWTH. 
 
+## Data analysis
+
+Data analysis scripts for the output from `mixcr` pipeline are stored in `mixcr_data_analysis` folder. These scripts will take data from `220701_etc_biopsies_preprocess` and `240826_data_preprocess` as inputs.
+
+
+
+
 
 
 
