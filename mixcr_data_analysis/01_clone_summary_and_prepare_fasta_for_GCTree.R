@@ -5,6 +5,8 @@
 ##### OUTPUT: 
 #####----------------------------------------------------------------------#####
 
+##### due to some unknown error, this script cannot be run in RSTUDIO. 
+##### run docker bash and run in command line.
 gc()
 rm(list = ls())
 
