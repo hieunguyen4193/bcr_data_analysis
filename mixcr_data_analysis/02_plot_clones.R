@@ -5,7 +5,7 @@ path.to.project.src <- "/media/hieunguyen/HNSD01/src/bcr_data_analysis/mixcr_dat
 source(file.path(path.to.project.src, "import_libraries.R"))
 source(file.path(path.to.project.src, "helper_functions.R"))
 
-new.pkgs <- c("msa", "ggpubr")
+new.pkgs <- c("msa", "ggpubr", "svglite")
 for (pkg in new.pkgs){
   if (pkg %in% installed.packages() ==  FALSE){
     BiocManager::install(pkg, update = FALSE)
