@@ -1,12 +1,16 @@
 #####----------------------------------------------------------------------#####
-#### in this analysis we merge clones from all MID samples of a mouse and 
-#### generate the trees. 
+##### in this analysis we merge clones from all MID samples of a mouse and 
+##### generate the trees. 
+##### INPUT: folder containing output folder from mixcr pipeline
+##### OUTPUT: 
 #####----------------------------------------------------------------------#####
 
+##### due to some unknown error, this script cannot be run in RSTUDIO. 
+##### run docker bash and run in command line.
 gc()
 rm(list = ls())
 
-path.to.project.src <- "/home/hieu/src/BCRTree_release/gctree/data_analysis"
+path.to.project.src <- "/media/hieunguyen/HNSD01/src/bcr_data_analysis/240826_data_preprocess"
 source(file.path(path.to.project.src, "import_libraries.R"))
 source(file.path(path.to.project.src, "helper_functions.R"))
 
@@ -34,28 +38,29 @@ library(ggtree)
 library(ape)
 library(igraph)
 
-outdir <- "/home/hieu/outdir"
-PROJECT <- "mixcr_pipeline_output"
+outdir <- "/media/hieunguyen/HNSD01/outdir"
+PROJECT <- "240826_BSimons"
+
+path.to.mid.metadata <- "/media/hieunguyen/HNSD01/src/bcr_data_analysis/240826_data_preprocess/240829 sample sheet.xlsx"
+
+if (grepl(".xlsx", path.to.mid.metadata) == TRUE){
+  mid.metadata <- readxl::read_excel(path.to.mid.metadata)
+} else {
+  mid.metadata <- read.csv(path.to.mid.metadata)
+}
+
 ##### AA sequence similarity threshold
 thres <- 0.15
 
 path.to.main.input <- file.path(outdir, PROJECT)
 path.to.main.output <- file.path(outdir, PROJECT, "data_analysis")
-path.to.01.output <- file.path(path.to.main.output, "01_output")
-path.to.02.output <- file.path(path.to.main.output, "02_output", sprintf("CDR3_%s", thres))
-dir.create(path.to.02.output, showWarnings = FALSE, recursive = TRUE)
+path.to.04.output <- file.path(path.to.main.output, "04_output", sprintf("CDR3_%s", thres))
+dir.create(path.to.04.output, showWarnings = FALSE, recursive = TRUE)
 
-path.to.mouse.output <- file.path(path.to.main.input, "mouse_based_output")
-path.to.mid.output <- file.path(path.to.main.input, "mid_based_output")
+path.to.mid.output <- file.path(path.to.main.input, "mixcr_pipeline_output")
 
 ##### Get germline sequences for V, D, J genes
 source(file.path(path.to.project.src, "get_germline_sequences.R"))
-
-##### METADATA
-path.to.mid.metadata <- file.path(outdir, "FT_output", "mid_labels.csv")
-mid.metadata <- read.csv(path.to.mid.metadata, sep = ";")
-
-mid.metadata$timepoint <- mid.metadata$population
 
 #####----------------------------------------------------------------------#####
 ##### Get clone information dataframes
@@ -67,19 +72,15 @@ names(all.clones.tables) <- unlist(lapply(
   }
 ))
 
-for (mouse.id in unique(mid.metadata$mouse)){
-# mouse.id <- "m11"
-  dir.create(file.path(path.to.02.output, mouse.id), showWarnings = FALSE, recursive = TRUE)
-  print(sprintf("generating clone dataframe for mouse %s", mouse.id))
-  path.to.mouse <- file.path(path.to.mouse.output, sprintf("MID_list_%s", mouse.id))
-  all.mids <- subset(mid.metadata, mid.metadata$mouse == mouse.id)$X
+for (mid in names(all.clones.tables)){
+  dir.create(file.path(path.to.04.output, mid), showWarnings = FALSE, recursive = TRUE)
+  print(sprintf("generating clone dataframe for mouse %s", mid))
   
-  cloneset_files <- all.clones.tables[all.mids]
+  cloneset_files <- all.clones.tables[mid]
   
   clonesets <- read_tsv(cloneset_files, id="fileName") %>% 
     mutate(id=str_remove_all(fileName,".*\\/|.reassigned_IGH.tsv"),
-           isotype=str_remove(allCHitsWithScore, "\\*.*")) 
-  
+           isotype=str_remove(allCHitsWithScore, "\\*.*"))
   clonesets <- clonesets %>% rowwise() %>%
     mutate(V.gene = str_split(str_split(allVHitsWithScore, ",")[[1]][[1]], "[()]")[[1]][[1]]) %>%
     # mutate(V.gene = str_split(V.gene, "[*]")[[1]][[1]]) %>% # do not remove * <<<<<
@@ -92,12 +93,12 @@ for (mouse.id in unique(mid.metadata$mouse)){
     mutate(VJseq.combi = sprintf("%s_%s_%s_%s", V.gene, J.gene, aaSeqCDR3, nSeqCDR3)) %>%
     mutate(VJ.combi = sprintf("%s_%s", V.gene, J.gene)) %>%
     mutate(VJ.len.combi = sprintf("%s_%s_%s", V.gene, J.gene,  nchar(nSeqCDR3)))
-  writexl::write_xlsx(clonesets, file.path(path.to.02.output, sprintf("clonesets_%s.xlsx", mouse.id)))
+  writexl::write_xlsx(clonesets, file.path(path.to.04.output, sprintf("clonesets_%s.xlsx", mid)))
   
   #####---------------------------------------------------------------------#####
   ##### Group AA sequences to group based on 85% similarity
   #####---------------------------------------------------------------------#####    
-  clonesetsdf <- readxl::read_excel(file.path(path.to.02.output, sprintf("clonesets_%s.xlsx", mouse.id)))
+  clonesetsdf <- readxl::read_excel(file.path(path.to.04.output, sprintf("clonesets_%s.xlsx", mid)))
   new.clonesetsdf <- data.frame()
   
   for (input.VJ.combi in unique(clonesetsdf$VJ.len.combi)){
@@ -116,14 +117,14 @@ for (mouse.id in unique(mid.metadata$mouse)){
     
     new.clonesetsdf <- rbind(new.clonesetsdf, tmpdf)
   }
-  writexl::write_xlsx(new.clonesetsdf, file.path(path.to.02.output, sprintf("clonesets_%s.split_clones_%s.xlsx", mouse.id, thres)))
+  writexl::write_xlsx(new.clonesetsdf, file.path(path.to.04.output, sprintf("clonesets_%s.split_clones_%s.xlsx", mid, thres)))
   
   # replace the clonesets by new.clonesets for downstream analysis
   clonesets <- new.clonesetsdf
   #####---------------------------------------------------------------------#####
   ##### Generate summary table for clones, not for the fasta files
   #####---------------------------------------------------------------------#####
-  if (file.exists(file.path(path.to.02.output, sprintf("clones_%s.xlsx", mouse.id))) == FALSE){
+  if (file.exists(file.path(path.to.04.output, sprintf("clones_%s.xlsx", mid))) == FALSE){
     clonedf <- data.frame(VJseq.combi.tmp = unique(clonesets$VJseq.combi)) %>%
       rowwise() %>%
       mutate(CDR3aa = str_split(VJseq.combi.tmp, "_")[[1]][[3]]) %>%
@@ -139,21 +140,21 @@ for (mouse.id in unique(mid.metadata$mouse)){
     
     clonedf <- subset(clonedf, select = -c(VJseq.combi.tmp))
     
-    writexl::write_xlsx(clonedf, file.path(path.to.02.output, sprintf("clones_%s.xlsx", mouse.id)))
+    writexl::write_xlsx(clonedf, file.path(path.to.04.output, sprintf("clones_%s.xlsx", mid)))
   } else {
-    clonedf <-  readxl::read_excel(file.path(path.to.02.output, sprintf("clones_%s.xlsx", mouse.id)))
+    clonedf <-  readxl::read_excel(file.path(path.to.04.output, sprintf("clones_%s.xlsx", mid)))
   }
   
   #####---------------------------------------------------------------------#####
   ##### generate fasta file for input to other tree generation tools
   #####---------------------------------------------------------------------#####
   for (input.VJ.combi in unique(clonesets[[sprintf("VJcombi_CDR3_%s", thres)]])){
-  V.gene <- str_split(input.VJ.combi, "_")[[1]][[1]]
-  J.gene <- str_split(input.VJ.combi, "_")[[1]][[2]]
-  CDR3.length <- as.numeric(str_split( , "_")[[1]][[3]])
+    V.gene <- str_split(input.VJ.combi, "_")[[1]][[1]]
+    J.gene <- str_split(input.VJ.combi, "_")[[1]][[2]]
+    CDR3.length <- as.numeric(str_split(input.VJ.combi, "_")[[1]][[3]])
     # remove the * sign in the file name
-    path.to.output.fasta <- file.path(path.to.02.output, mouse.id, sprintf("%s_%s.aln.fasta", 
-                                                                           mouse.id, 
+    path.to.output.fasta <- file.path(path.to.04.output, mid, sprintf("%s_%s.aln.fasta", 
+                                                                           mid, 
                                                                            str_replace_all(input.VJ.combi, "[*]", "-")))
     if (file.exists(path.to.output.fasta) == FALSE){
       fasta.output <- subset(clonesets, clonesets[[sprintf("VJcombi_CDR3_%s", thres)]] == input.VJ.combi)[, c("targetSequences", "uniqueMoleculeCount", "V.gene", "D.gene", "J.gene", "id", "aaSeqCDR3", "nSeqCDR3")]
@@ -181,13 +182,13 @@ for (mouse.id in unique(mid.metadata$mouse)){
             abundance <- fasta.output[i, ]$abundance
             output.info <- sprintf(">Sample:%s|Mouse:%s|CDR3aa:%s|CDR3nt:%s|Index:%s|Abundance:%s", 
                                    sample.id, 
-                                   mouse.id,
+                                   mid,
                                    cdr3aa,
                                    cdr3nt,
                                    i,
                                    abundance)            
           }
-
+          
           output.seq <- toString(unmasked(msaMiXCRtreeVDJ)[[i]])  
           # print(nchar(output.seq))
           cat(output.info)
@@ -196,11 +197,7 @@ for (mouse.id in unique(mid.metadata$mouse)){
           cat("\n")
         }
         sink()
-        }
+      }
     }
   }
 }
-
-
-
-

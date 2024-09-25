@@ -73,6 +73,8 @@ num.PC.used.in.Clustering <- 25
 num.PC.used.in.UMAP <- 25
 my_random_seed <- 42
 
+# install.packages("https://cran.r-project.org/src/contrib/Archive/knitr/knitr_1.45.tar.gz", type = "source", repos = NULL)
+# install.packages("https://cran.r-project.org/src/contrib/Archive/rmarkdown/rmarkdown_2.26.tar.gz", type = "source", repos = NULL)
 
 all.samples <- c("M1", "M2", "M3", "P1", "P2", "P3")
 all.quantiles <- c(0.99, 0.95, 0.90, 0.85)
@@ -124,11 +126,12 @@ s.obj <- AddMetaData(object = s.obj, col.name = "SampleID", metadata = meta.data
 ##### pre-processing the data with ibex
 #####----------------------------------------------------------------------#####
 #### install scRepertoire 2.0
-if (packageVersion("scRepertoire") != "2.0.5"){
+if (packageVersion("scRepertoire") != "2.0.6"){
   install.packages("https://cran.r-project.org/src/contrib/Archive/Matrix/Matrix_1.6-5.tar.gz", type = "source", repos = NULL)
   install.packages(c("ggdendro", "iNEXT", "quantreg"))
   # install.packages("https://www.bioconductor.org/packages/release/bioc/src/contrib/scRepertoire_2.0.0.tar.gz", type = "source", repos = NULL)
-  devtools::install_github(repo = "ncborcherding/scRepertoire")
+  devtools::install_github(repo = "ncborcherding/scRepertoire", upgrade = FALSE)
+  install.packages("https://cran.r-project.org/src/contrib/Archive/ggplot2/ggplot2_3.4.4.tar.gz", repos = NULL, type = "source")
 }
 library(scRepertoire)
 
@@ -216,7 +219,6 @@ DimPlot(object = s.obj, label = TRUE, label.size = 8, reduction = "INTE_UMAP", l
 DimPlot(object = s.obj, label = TRUE, label.size = 8, reduction = "INTE_UMAP", label.box = TRUE, group.by = "name")
 ```
 
-
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
 s.obj <- combineExpression(combined.contigs, s.obj, cloneCall="aa")
 
@@ -249,9 +251,7 @@ if (file.exists(file.path(path.to.06.output, sprintf("clone_Table_%s.xlsx", inte
 } else {
   clonedf <- readxl::read_excel(file.path(path.to.06.output, sprintf("clone_Table_%s.xlsx", integration.case)))
 }
-
 ```
-
 
 ## UMAP clone size
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
@@ -273,7 +273,6 @@ for (i in setdiff(colnames(clonedf), c("CTstrict", "count"))){
 }
 ```
 
-
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
 for (sample.id in all.integration.case[[integration.case]]){
   cat(sprintf("## Sample %s {.tabset} \n", sample.id))
@@ -292,14 +291,7 @@ for (sample.id in all.integration.case[[integration.case]]){
   }
   cat("\n \n")
 }
-
 ```
-
-
-```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
-
-```
-
 
 # Basic clonal analysis
 
@@ -324,7 +316,6 @@ if (file.exists( file.path(path.to.06.output, "combined_contigs_with_hashtags_in
   new.combined.contigs <- readRDS( file.path(path.to.06.output, "combined_contigs_with_hashtags_info.rds"))
 }
 ```
-
 
 ```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
 clonalAbundance(new.combined.contigs, 
@@ -358,4 +349,173 @@ p <- clonalCompare(combined.contigs,
 print(p)
 ```
 
+# Compare to clones from the bulk-BCR data
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+#####----------------------------------------------------------------------------#####
+##### PREPROCESS CLONE INFORMATION FROM BULK DATA AND SINGLE CELL DATA; MATCH TWO DATASET TOGETHER.
+#####----------------------------------------------------------------------------#####
+if (file.exists(file.path(path.to.06.output, "combine_clonedf.xlsx")) == FALSE){
+  path.to.bulk.data <- file.path(outdir, "240826_BSimons", "data_analysis")
+  path.to.04.bulk.output <- file.path(path.to.bulk.data, "04_output")
+  path.to.02.bulk.output <- file.path(path.to.bulk.data, "02_output")
+  
+  if (file.exists(file.path(path.to.06.output, "sc_clones.xlsx")) == FALSE){
+    all.clone.files <- Sys.glob(file.path(path.to.04.bulk.output, "CDR3_0.15", "clonesets_*.xlsx"))
+    all.clone.files <- all.clone.files[grepl("split", all.clone.files) == FALSE]
+    
+    names(all.clone.files) <- to_vec(for (item in basename(all.clone.files)) str_replace(str_replace(item, "clonesets_", ""), ".xlsx", ""))
+    
+    bulkdf <- data.frame()
+    for (i in names(all.clone.files)){
+      file <- all.clone.files[[i]]
+      tmpdf <- readxl::read_excel(file)
+      tmpdf$MID <- i 
+      bulkdf <- rbind(bulkdf, tmpdf)
+    }
+    bulk.selected.cols <- c("V.gene", "J.gene", "nSeqCDR3", "aaSeqCDR3", "MID", "name")
+    bulkdf.raw <- bulkdf
+    bulkdf$V.gene <- unlist(lapply(bulkdf$V.gene, function(x){
+      str_split(x, "[*]")[[1]][[1]]
+    }))
+    bulkdf$J.gene <- unlist(lapply(bulkdf$J.gene, function(x){
+      str_split(x, "[*]")[[1]][[1]]
+    }))
+    bulkdf$name <- bulkdf$MID
+    bulkdf <- bulkdf[, bulk.selected.cols]
+    path.to.sc.data <- file.path(outdir, "240805_BSimons", "20240820", "default", "VDJ_output")
+    all.vdj.outputs <- Sys.glob(file.path(path.to.sc.data, "annotated_contigs_clonaltype*.csv"))
+    
+    scdf <- data.frame()
+    for (file in all.vdj.outputs){
+      sample.id <- str_replace(str_replace(basename(file), "annotated_contigs_clonaltype_", ""), ".csv", "")
+      tmpdf <- read.csv(file)
+      tmpdf$name <- sample.id
+      scdf <- rbind(scdf, tmpdf)
+    }
+    scdf.raw <- scdf
+    
+    scdf <- subset(scdf, select = -c(X))
+    selected.cols <- c("barcode", "name", "IGH", "cdr3_aa1", "cdr3_nt1")
+    scdf <- scdf[, selected.cols]
+    
+    # remove NA clones
+    scdf <- subset(scdf, is.na(scdf$IGH) == FALSE)
+    
+    ##### convert scdf to match bulkdf
+    scdf$MID <- unlist(lapply(
+      scdf$name, function(x){
+        str_replace(str_replace(x, "M", "m"), "P", "m")
+      }
+    ))
+    scdf$nSeqCDR3 <- scdf$cdr3_nt1
+    scdf$aaSeqCDR3 <- scdf$cdr3_aa1
+    
+    scdf$V.gene <- unlist(lapply(scdf$IGH, function(x){
+        str_split(x, "[.]")[[1]][[1]]
+    }))
+    scdf$J.gene <- unlist(lapply(scdf$IGH, function(x){
+        str_split(x, "[.]")[[1]][[3]]
+    }))
+    
+    scdf <- scdf[, c("barcode", bulk.selected.cols)]
+    
+    bulkdf$barcode <- to_vec( for(item in seq(1, nrow(bulkdf))) sprintf("seq%s", item) )
+    writexl::write_xlsx(scdf, file.path(path.to.06.output, "sc_clones.xlsx"))
+    writexl::write_xlsx(bulkdf, file.path(path.to.06.output, "bulk_clones.xlsx"))
+  } else {
+    scdf <- readxl::read_excel(file.path(path.to.06.output, "sc_clones.xlsx"))
+    bulkdf <- readxl::read_excel(file.path(path.to.06.output, "bulk_clones.xlsx"))
+  }
+  
+  scdf$origin <- "single-cell"
+  bulkdf$origin <- "bulk"
+  
+  clonedf <- rbind(scdf, bulkdf[, colnames(scdf)])
+  writexl::write_xlsx(clonedf, file.path(path.to.06.output, "combine_clonedf.xlsx"))
+} else {
+  clonedf <- readxl::read_excel(file.path(path.to.06.output, "combine_clonedf.xlsx"))
+  scdf <- readxl::read_excel(file.path(path.to.06.output, "sc_clones.xlsx"))
+  bulkdf <- readxl::read_excel(file.path(path.to.06.output, "bulk_clones.xlsx"))
+}
+
+##### add some more information on the sequences
+clonedf <- clonedf %>% rowwise() %>% 
+  mutate(VJ.len.combi = sprintf("%s_%s_%s", V.gene, J.gene,  nchar(nSeqCDR3)) )
+```
+
+# Group clone by sequence similarity and V-J genes
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+source(file.path(path.to.project.src, "helper_functions.R"))
+clonedf <- clonedf %>% rowwise() %>% 
+  mutate(VJ.len.combi = sprintf("%s_%s_%s", V.gene, J.gene,  nchar(nSeqCDR3)) )
+
+##### Assign clones to clusters
+if (file.exists(file.path(path.to.06.output, "full_clonedf.xlsx")) == FALSE){
+  new.clonedf <- data.frame()
+for (input.VJ.combi in unique(clonedf$VJ.len.combi)){
+  tmpdf <- subset(clonedf, clonedf$VJ.len.combi == input.VJ.combi)
+  seqs <- unique(tmpdf$aaSeqCDR3)
+  if (length(seqs) >= 2){
+    cluster.output <- assign_clusters_to_sequences(seqs, threshold = threshold)$res
+    tmpdf[[sprintf("VJcombi_CDR3_%s", threshold)]] <- unlist(lapply(
+      tmpdf$aaSeqCDR3, function(x){
+        return(sprintf("%s_%s", input.VJ.combi, subset(cluster.output, cluster.output$seq == x)$cluster))
+      }
+    ))    
+  } else {
+    tmpdf[[sprintf("VJcombi_CDR3_%s", threshold)]] <- sprintf("%s_1", input.VJ.combi)
+  }
+  new.clonedf <- rbind(new.clonedf, tmpdf)
+}
+writexl::write_xlsx(new.clonedf, file.path(path.to.06.output, "full_clonedf.xlsx"))
+} else {
+  new.clonedf <- readxl::read_excel(file.path(path.to.06.output, "full_clonedf.xlsx"))
+}
+
+cloneCluster.summary <- data.frame(clone = unique(new.clonedf$VJcombi_CDR3_0.85)) %>% 
+  rowwise() %>%
+  mutate(num_samples = length(unique(subset(new.clonedf, new.clonedf$VJcombi_CDR3_0.85 == clone)$name))) %>%
+  mutate(num_total_seq = nrow(subset(new.clonedf, new.clonedf$VJcombi_CDR3_0.85 == clone))) %>%
+  mutate(num_unique_seq = length(unique(subset(new.clonedf, new.clonedf$VJcombi_CDR3_0.85 == clone)$nSeqCDR3))) %>%
+  arrange(desc(num_total_seq))
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+print(sprintf("Number of clones: %s", nrow(cloneCluster.summary)))
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+print(sprintf("Number of clones that are unique in only ONE sample: %s", nrow(subset(cloneCluster.summary, cloneCluster.summary$num_samples == 1))))
+```
+
+# Visualization
+## Circos plot
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+clone.sampledf <- data.frame(SampleID = unique(new.clonedf$name))
+for (sample2 in unique(new.clonedf$name)){
+  clone.sampledf[[sample2]] <- unlist(
+    lapply(
+      clone.sampledf$SampleID, function(sample1){
+        return(length(unique(intersect(subset(new.clonedf, new.clonedf$name == sample1)$VJcombi_CDR3_0.85, subset(new.clonedf, new.clonedf$name == sample2)$VJcombi_CDR3_0.85))))
+      }
+    )
+  )
+}
+
+clone.sampledf.pivot <- clone.sampledf %>% pivot_longer(!SampleID, names_to = "SampleID2", values_to = "count")
+
+clone.sampledf %>% create_dt()
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+if ("heatmaply" %in% installed.packages() == FALSE){
+  install.packages("heatmaply")
+}
+library(heatmaply)
+heatmaply(clone.sampledf %>% column_to_rownames("SampleID"))
+```
+
+```{r echo=FALSE, warning=FALSE, message=FALSE, results='asis', fig.width=14, fig.height=10}
+chordDiagram(clone.sampledf.pivot) 
+```
 

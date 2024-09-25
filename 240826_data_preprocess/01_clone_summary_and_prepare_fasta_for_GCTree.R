@@ -10,7 +10,7 @@
 gc()
 rm(list = ls())
 
-path.to.project.src <- "/media/hieunguyen/HNSD01/src/bcr_data_analysis/mixcr_data_analysis"
+path.to.project.src <- "/media/hieunguyen/HNSD01/src/bcr_data_analysis/240826_data_preprocess"
 source(file.path(path.to.project.src, "import_libraries.R"))
 source(file.path(path.to.project.src, "helper_functions.R"))
 

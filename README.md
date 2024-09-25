@@ -17,17 +17,5 @@ All raw data are stored in NAS and Coscine RWTH.
 Data analysis scripts for the output from `mixcr` pipeline are stored in `mixcr_data_analysis` folder. These scripts will take data from `220701_etc_biopsies_preprocess` and `240826_data_preprocess` as inputs.
 
 Scripts:
-
 - `01_clone_summary_and_prepare_fasta_for_GCTree.R`: due to some unknown error/bug/whatever reason it is, this script throws some confusing error when being run in `Rstudio`. The script runs perfectly fine in command line inside the `docker` container `tronghieunguyen/scrna_gex_pipeline_ibex_trex_msa`. This generates the output folder `01_output` which contains a sub-folder `CDR3_<BCR sequence dissimilarity threshold>` (currently use 0.15). `Fasta` files are stored in `<mouse ID>` folder. Summary tables for all clones are saved in `.xlsx` files. 
-
-
-
-
-
-
-
-
-
-
-
 
