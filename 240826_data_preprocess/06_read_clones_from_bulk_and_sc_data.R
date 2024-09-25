@@ -23,6 +23,7 @@ output.version <- "20240820"
 config.version <- "default"
 chosen.quantile <- 0.85
 integration.case <- "all_samples"
+threshold <- 0.85
 
 path.to.main.input <- file.path(outdir, PROJECT, output.version, config.version)
 path.to.main.output <- file.path(outdir, PROJECT, "data_analysis", output.version, config.version)
@@ -81,11 +82,7 @@ if (file.exists(file.path(path.to.06.output, "combine_clonedf.xlsx")) == FALSE){
     scdf <- subset(scdf, is.na(scdf$IGH) == FALSE)
     
     ##### convert scdf to match bulkdf
-    scdf$MID <- unlist(lapply(
-      scdf$name, function(x){
-        str_replace(str_replace(x, "M", "m"), "P", "m")
-      }
-    ))
+    scdf$MID <- scdf$name
     scdf$nSeqCDR3 <- scdf$cdr3_nt1
     scdf$aaSeqCDR3 <- scdf$cdr3_aa1
     
@@ -136,10 +133,60 @@ if (file.exists(file.path(path.to.06.output, "combine_clonedf.xlsx")) == FALSE){
       return(convert.label[[x]])
     }
   ))
+  clonedf$mouseid <- unlist(lapply(
+    clonedf$MID, function(x){
+      if (x %in% c(unique(scdf$name))){
+        return(sprintf("m%s", str_replace(str_replace(x, "M", ""), "P", "")))
+      } else {
+        return(subset(sample.metadata, sample.metadata$MID == x)$mouse)
+      }
+    }
+  ))
   writexl::write_xlsx(clonedf, file.path(path.to.06.output, "combine_clonedf.xlsx"))
 } else {
   clonedf <- readxl::read_excel(file.path(path.to.06.output, "combine_clonedf.xlsx"))
   scdf <- readxl::read_excel(file.path(path.to.06.output, "sc_clones.xlsx"))
   bulkdf <- readxl::read_excel(file.path(path.to.06.output, "bulk_clones.xlsx"))
 }
+
+clonedf <- clonedf %>% rowwise() %>% 
+  mutate(VJ.len.combi = sprintf("%s_%s_%s", V.gene, J.gene,  nchar(nSeqCDR3)) )
+
+# Group clone by sequence similarity and V-J genes
+source(file.path(path.to.project.src, "helper_functions.R"))
+clonedf <- clonedf %>% rowwise() %>% 
+  mutate(VJ.len.combi = sprintf("%s_%s_%s", V.gene, J.gene,  nchar(nSeqCDR3)) )
+
+##### Assign clones to clusters
+if (file.exists(file.path(path.to.06.output, "full_clonedf.xlsx")) == FALSE){
+  new.clonedf <- data.frame()
+  for (input.VJ.combi in unique(clonedf$VJ.len.combi)){
+    tmpdf <- subset(clonedf, clonedf$VJ.len.combi == input.VJ.combi)
+    seqs <- unique(tmpdf$aaSeqCDR3)
+    if (length(seqs) >= 2){
+      cluster.output <- assign_clusters_to_sequences(seqs, threshold = threshold)$res
+      tmpdf[[sprintf("VJcombi_CDR3_%s", threshold)]] <- unlist(lapply(
+        tmpdf$aaSeqCDR3, function(x){
+          return(sprintf("%s_%s", input.VJ.combi, subset(cluster.output, cluster.output$seq == x)$cluster))
+        }
+      ))    
+    } else {
+      tmpdf[[sprintf("VJcombi_CDR3_%s", threshold)]] <- sprintf("%s_1", input.VJ.combi)
+    }
+    new.clonedf <- rbind(new.clonedf, tmpdf)
+  }
+  writexl::write_xlsx(new.clonedf, file.path(path.to.06.output, "full_clonedf.xlsx"))
+  
+  cloneCluster.summary <- data.frame(clone = unique(new.clonedf[[sprintf("VJcombi_CDR3_%s", threshold)]])) %>% 
+    rowwise() %>%
+    mutate(num_samples = length(unique(subset(new.clonedf, new.clonedf[[sprintf("VJcombi_CDR3_%s", threshold)]] == clone)$name))) %>%
+    mutate(num_total_seq = nrow(subset(new.clonedf, new.clonedf[[sprintf("VJcombi_CDR3_%s", threshold)]] == clone))) %>%
+    mutate(num_unique_seq = length(unique(subset(new.clonedf, new.clonedf[[sprintf("VJcombi_CDR3_%s", threshold)]] == clone)$nSeqCDR3))) %>%
+    arrange(desc(num_total_seq))
+  writexl::write_xlsx(cloneCluster.summary, file.path(path.to.06.output, "cloneCluster_summary.xlsx"))
+  
+} else {
+  new.clonedf <- readxl::read_excel(file.path(path.to.06.output, "full_clonedf.xlsx"))
+}
+
 
