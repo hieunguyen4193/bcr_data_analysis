@@ -39,7 +39,8 @@ if ("svglite" %in% installed.packages() == FALSE){
   install.packages("svglite")
 }
 
-for (plot.case in names(all.cases)){
+# for (plot.case in names(all.cases)){
+for (plot.case in c("m1_only")){
   dir.create(file.path(path.to.07.output, plot.case), showWarnings = FALSE, recursive = TRUE)
   mouse.list <- all.cases[[plot.case]]
   
