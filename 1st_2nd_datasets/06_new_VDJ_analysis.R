@@ -99,27 +99,56 @@ clonedf.raw <- clonedf
 ##### keep IGH clonedf only
 clonedf <- subset(clonedf, clonedf$chain == "IGH")
 
-i <- 1
-V.gene <- clonedf[i, ]$v_gene
-J.gene <- clonedf[i, ]$j_gene
-CDR3.seq <- clonedf[i, ]$cdr3_nt
-CDR3.length <- nchar(CDR3.seq)
-
-# GL.V.gene <- s.V.genes[[V.gene]] %>% as.character()
-# GL.J.gene <- s.J.genes[[J.gene]] %>% as.character()
-
-GL.V.gene <- cellranger.ref[[V.gene]] %>% as.character()
-GL.J.gene <- cellranger.ref[[J.gene]] %>% as.character()
-
-repN.seq <- paste(replicate(n = CDR3.length, expr = "N"), collapse = "")
-GL.seq <- sprintf("%s%s%s", GL.V.gene, repN.seq, GL.J.gene)
-clone.seq <- clonedf[i, ]$prep.full.seq
-
-input.seqs <- c(clone.seq, GL.seq) %>% DNAStringSet()
-msa.output <- msa(input.seqs, method = "Muscle")
-aligned.clone.seq <- toString(unmasked(msa.output)[[1]])
-aligned.GL.seq <- toString(unmasked(msa.output)[[2]])
-
-
-
-         
+clonedf$num.mutation <- unlist(lapply(
+  seq(1, nrow(clonedf)), function(i){
+    V.gene <- clonedf[i, ]$v_gene
+    J.gene <- clonedf[i, ]$j_gene
+    CDR3.seq <- clonedf[i, ]$cdr3_nt
+    CDR3.length <- nchar(CDR3.seq)
+    clone.seq <- clonedf[i, ]$prep.full.seq
+    
+    GL.V.gene.IMGT <- s.V.genes[[V.gene]] %>% as.character()
+    GL.J.gene.IMGT <- s.J.genes[[J.gene]] %>% as.character()
+    
+    GL.V.gene.10x <- cellranger.ref[[V.gene]] %>% as.character()
+    GL.J.gene.10x <- cellranger.ref[[J.gene]] %>% as.character()
+    
+    repN.seq <- paste(replicate(n = CDR3.length, expr = "N"), collapse = "")
+    
+    GL.seq.IMGT <- sprintf("%s%s%s", GL.V.gene.IMGT, repN.seq, GL.J.gene.IMGT)
+    input.seqs.IMGT <- c(clone.seq, GL.seq.IMGT) %>% DNAStringSet()
+    msa.IMGT <- msa(input.seqs.IMGT, method = "Muscle")
+    aligned.clone.seq.IMGT <- toString(unmasked(msa.IMGT)[[1]])
+    aligned.GL.seq.IMGT <- toString(unmasked(msa.IMGT)[[2]])
+    
+    GL.seq.10x <- sprintf("%s%s%s", GL.V.gene.10x, repN.seq, GL.J.gene.10x)
+    input.seqs.10x <- c(clone.seq, GL.seq.10x) %>% DNAStringSet()
+    msa.10x <- msa(input.seqs.10x, method = "Muscle")
+    aligned.clone.seq.10x <- toString(unmasked(msa.10x)[[1]])
+    aligned.GL.seq.10x <- toString(unmasked(msa.10x)[[2]])
+    
+    s1 <- aligned.clone.seq.10x
+    s2 <- aligned.GL.seq.10x
+    sdf <- data.frame(s1 = str_split(s1, "")[[1]],
+                      s2 = str_split(s2, "")[[1]])
+    
+    check_mutation <- function(x1, x2){
+      if (x1 == "-" | x2 == "-"){
+        output <- "undefined"
+      } else if (x1 == "N" | x2 == "N"){
+        output <- "undefined"
+      } else {
+        if (x1 == x2){
+          output <- "matched"
+        } else {
+          output <- "mutation"
+        }
+      }
+      return(output)
+    }
+    
+    sdf <- sdf %>% rowwise() %>% mutate(status = check_mutation(s1, s2))
+    count.mutation <- table(sdf$status)
+    return(count.mutation[["matched"]])
+  }
+))
