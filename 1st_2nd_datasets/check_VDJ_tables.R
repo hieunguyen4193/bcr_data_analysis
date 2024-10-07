@@ -11,6 +11,7 @@ library("Biostrings")
 
 outdir <- "/media/hieunguyen/HNSD_mini/outdir"
 PROJECT <- "1st_2nd_BSimons_Datasets"
+path.to.main.output <- file.path(outdir, PROJECT, "data_analysis")
 
 #####----------------------------------------------------------------------#####
 ##### read file from VDJ output, after pre-processing. 
@@ -39,34 +40,63 @@ names(all.raw.VDJ.fasta) <- to_vec(
 )
 all.raw.VDJ.fasta <- all.raw.VDJ.fasta[names(all.VDJ.files)]
 
+##### get metadata sheets from the 1st and 2nd datasets
+
+metadata.1st <- readxl::read_excel(file.path(path.to.main.output, "01_output", "metadata_1st_dataset.xlsx"))
+metadata.2nd <- readxl::read_excel(file.path(path.to.main.output, "01_output", "metadata_2nd_dataset.xlsx"))
+full.metadata <- rbind(subset(metadata.1st, select = -c(integrated_snn_res.1)), metadata.2nd)
+
 #####----------------------------------------------------------------------#####
 ##### merge pre-processed data with the raw VDJ data
 #####----------------------------------------------------------------------#####
 maindf <- list()
 for (sampleid in names(all.VDJ.files)){
-  rawdf <- read.csv(all.raw.VDJ.files[[sampleid]])
-  prepdf <- read.csv(all.VDJ.files[[sampleid]]) 
-  prepdf$prep_barcode <- prepdf$barcode
-  prepdf <- prepdf %>% rowwise() %>%
-    mutate(barcode = str_replace(barcode, sprintf("%s_%s_", sampleid, sampleid), ""))
-  prepdf <- subset(prepdf, select = c(barcode, CTgene, CTnt, CTaa, CTstrict))
-  tmpdf1 <- merge(rawdf, prepdf, by.x = "barcode", by.y = "barcode")
-  tmp.fasta <- readDNAStringSet(all.raw.VDJ.fasta[[sampleid]])
-  tmpdf2 <- as.data.frame(tmp.fasta) %>% rownames_to_column("contig_id")
-  colnames(tmpdf2) <- c("contig_id", "fasta_seq")
-  final.tmpdf <- merge(tmpdf1, tmpdf2, by.x = "contig_id", by.y = "contig_id")
-  maindf[[sampleid]] <- final.tmpdf
-  writexl::write_xlsx(maindf[[sampleid]], file.path(path.to.save.output, sprintf("%s.xlsx", sampleid)))
+  if (file.exists(file.path(path.to.save.output, sprintf("%s.xlsx", sampleid))) == FALSE){
+    rawdf <- read.csv(all.raw.VDJ.files[[sampleid]])
+    prepdf <- read.csv(all.VDJ.files[[sampleid]]) 
+    prepdf$prep_barcode <- prepdf$barcode
+    prepdf <- prepdf %>% rowwise() %>%
+      mutate(barcode = str_replace(barcode, sprintf("%s_%s_", sampleid, sampleid), ""))
+    prepdf <- subset(prepdf, select = c(prep_barcode, barcode, CTgene, CTnt, CTaa, CTstrict))
+    tmpdf1 <- merge(rawdf, prepdf, by.x = "barcode", by.y = "barcode")
+    tmp.fasta <- readDNAStringSet(all.raw.VDJ.fasta[[sampleid]])
+    tmpdf2 <- as.data.frame(tmp.fasta) %>% rownames_to_column("contig_id")
+    colnames(tmpdf2) <- c("contig_id", "fasta_seq")
+    final.tmpdf <- merge(tmpdf1, tmpdf2, by.x = "contig_id", by.y = "contig_id")
+    final.tmpdf <- final.tmpdf %>% rowwise() %>%
+      mutate(prep.full.seq = sprintf("%s%s%s%s%s%s%s",
+                                     fwr1_nt,
+                                     cdr1_nt,
+                                     fwr2_nt,
+                                     cdr2_nt,
+                                     fwr3_nt,
+                                     cdr3_nt,
+                                     fwr4_nt)) %>%
+      mutate(check.seqs = ifelse(grepl(prep.full.seq, fasta_seq) == TRUE, "yes", "no")) %>%
+      mutate(in.final.data = ifelse(prep_barcode %in% full.metadata$barcode, "yes", "no") ) %>%
+      mutate(prefix_and_suffix = ifelse(check.seqs == "yes", str_replace(fasta_seq, prep.full.seq, "_"), "none")) %>%
+      mutate(prefix = ifelse(check.seqs == "yes", str_split(prefix_and_suffix, "_")[[1]][[1]], "none")) %>%
+      mutate(suffix = ifelse(check.seqs == "yes", str_split(prefix_and_suffix, "_")[[1]][[2]], "none")) %>%
+      subset(select = -c(prefix_and_suffix)) %>%
+      mutate(CTstrict = str_replace_all(CTstrict, ":", "_"))
+    maindf[[sampleid]] <- final.tmpdf
+    writexl::write_xlsx(maindf[[sampleid]], file.path(path.to.save.output, sprintf("%s.xlsx", sampleid)))
+  } else {
+    maindf[[sampleid]] <- readxl::read_excel(file.path(path.to.save.output, sprintf("%s.xlsx", sampleid)))
+  }
 }
 
 ##### Check fasta files
-tmpdf <- maindf$`17_MM9_Ecoli`
+tmpdf <- maindf[[sampleid]]
+path.to.save.sample.output <- file.path(path.to.save.output, sampleid)
+dir.create(path.to.save.sample.output, showWarnings = FALSE, recursive = TRUE)
 
-to_vec(for (item in colnames(tmpdf))
-  if (grepl("_nt", item)) item
-  )
+count.clonedf <- data.frame(table(tmpdf$CTstrict) %>% sort(decreasing = TRUE))
+colnames(count.clonedf) <- c("CTstrict", "count")
+writexl::write_xlsx(count.clonedf, file.path(path.to.save.sample.output, sprintf("Summary_count_%s.xlsx", sampleid)))
 
-
-
-
+for (clone.id in unique(count.clonedf$CTstrict)){
+  dir.create(file.path(path.to.save.sample.output, clone.id))
+  subset.tmpdf <- subset(tmpdf, tmpdf$CTstrict == clone.id)  
+}
 
