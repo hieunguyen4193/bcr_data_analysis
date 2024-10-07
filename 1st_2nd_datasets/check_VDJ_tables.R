@@ -78,7 +78,7 @@ for (sampleid in names(all.VDJ.files)){
       mutate(prefix = ifelse(check.seqs == "yes", str_split(prefix_and_suffix, "_")[[1]][[1]], "none")) %>%
       mutate(suffix = ifelse(check.seqs == "yes", str_split(prefix_and_suffix, "_")[[1]][[2]], "none")) %>%
       subset(select = -c(prefix_and_suffix)) %>%
-      mutate(CTstrict = str_replace_all(CTstrict, ":", "_"))
+      mutate(CTstrict = str_replace_all(CTstrict, ":", "__"))
     maindf[[sampleid]] <- final.tmpdf
     writexl::write_xlsx(maindf[[sampleid]], file.path(path.to.save.output, sprintf("%s.xlsx", sampleid)))
   } else {
@@ -87,16 +87,19 @@ for (sampleid in names(all.VDJ.files)){
 }
 
 ##### Check fasta files
-tmpdf <- maindf[[sampleid]]
-path.to.save.sample.output <- file.path(path.to.save.output, sampleid)
-dir.create(path.to.save.sample.output, showWarnings = FALSE, recursive = TRUE)
-
-count.clonedf <- data.frame(table(tmpdf$CTstrict) %>% sort(decreasing = TRUE))
-colnames(count.clonedf) <- c("CTstrict", "count")
-writexl::write_xlsx(count.clonedf, file.path(path.to.save.sample.output, sprintf("Summary_count_%s.xlsx", sampleid)))
-
-for (clone.id in unique(count.clonedf$CTstrict)){
-  dir.create(file.path(path.to.save.sample.output, clone.id))
-  subset.tmpdf <- subset(tmpdf, tmpdf$CTstrict == clone.id)  
+for (sampleid in names(maindf)){
+  tmpdf <- maindf[[sampleid]]
+  path.to.save.sample.output <- file.path(path.to.save.output, sampleid)
+  dir.create(path.to.save.sample.output, showWarnings = FALSE, recursive = TRUE)
+  
+  count.clonedf <- data.frame(table(tmpdf$CTstrict) %>% sort(decreasing = TRUE))
+  colnames(count.clonedf) <- c("CTstrict", "count")
+  writexl::write_xlsx(count.clonedf, file.path(path.to.save.sample.output, sprintf("Summary_count_%s.xlsx", sampleid)))
+  
+  for (clone.id in unique(count.clonedf$CTstrict)){
+    dir.create(file.path(path.to.save.sample.output, "all_clones", clone.id), showWarnings = FALSE, recursive = TRUE)
+    subset.tmpdf <- subset(tmpdf, tmpdf$CTstrict == clone.id)  
+    writexl::write_xlsx(subset.tmpdf, file.path(path.to.save.sample.output, "all_clones", clone.id, sprintf("clone_%s.xlsx", clone.id)))
+  }
 }
 
