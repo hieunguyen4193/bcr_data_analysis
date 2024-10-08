@@ -81,7 +81,7 @@ metadata.2nd <- s.obj.2nd@meta.data %>% rownames_to_column("barcode")
 all.samples <- c(unique(s.obj.1st$name), unique(s.obj.2nd$name))
 
 #####----------------------------------------------------------------------#####
-##### clone dataframes
+##### Generate clone dataframe and calculate mutation rate for each clone/cell
 #####----------------------------------------------------------------------#####
 path.to.clone.dfs <- file.path(path.to.main.output, "VDJ_data_output")
 
@@ -164,3 +164,17 @@ if (file.exists(file.path(path.to.06.output, "clonedf_with_mutation_rate.xlsx"))
   clonedf <- readxl::read_excel(file.path(path.to.06.output, "clonedf_with_mutation_rate.xlsx"))
 }
 
+#####----------------------------------------------------------------------#####
+##### 06.1: SCATTER PLOT: mutation rate and clone size
+#####----------------------------------------------------------------------#####
+sample.id <- "17_MM9_Ecoli"
+tmpdf <- clonedf[, c("barcode", "CTstrict", "num.mutation", "SampleID")] %>%
+  subset(SampleID == sample.id)
+
+mean.mutationdf <- tmpdf %>% group_by(CTstrict) %>% 
+  summarise(mean.num.mutation = mean(num.mutation, na.rm = TRUE)) 
+colnames(mean.mutationdf) <- c("clone", "avg_num_mutation")
+mean.mutationdf <- mean.mutationdf %>% rowwise() %>% 
+  mutate(clone.size = nrow(subset(tmpdf, tmpdf$CTstrict == clone)))
+
+mean.mutationdf %>% ggplot(aes(x = clone.size, y = avg_num_mutation)) + geom_point()
